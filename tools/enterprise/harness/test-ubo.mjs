@@ -177,6 +177,14 @@ phase('install', async ( ) => {
     const applied = await ctx.cdp.waitInWorker(EXT_ID, ADMIN_APPLIED, 90000).catch(e => e.message);
     check('admin policy filters (managed storage toOverwrite.filters) in effect after install',
         applied === true, `after ${Date.now() - t0} ms from browser launch`);
+    const timeline = await ctx.cdp.evalInWorker(EXT_ID, `chrome.storage.local.get('uBOmv3.policyRestarts').then(b => ({
+        policyRestarts: b['uBOmv3.policyRestarts'] || [],
+        swStartedAt: self.uBOmv3.stats.swStartedAt,
+    }))`).catch(e => ({ error: e.message }));
+    check('admin policy restarts (ms from browser launch)', true, JSON.stringify({
+        policyRestarts: timeline.policyRestarts?.map(t => t - t0),
+        swStartedAt: timeline.swStartedAt - t0,
+    }), { info: true });
     await sleep(2000);
     await ctx.cdp.waitInWorker(EXT_ID, READY, 30000);
     const info = await ctx.cdp.evalInWorker(EXT_ID, `chrome.management.getSelf().then(s => ({
@@ -396,6 +404,52 @@ phase('dashboard-offscreen', async ( ) => {
     check('filter reverse lookup after SW restart', `${JSON.stringify(r)}`.includes('user-filters'), `${JSON.stringify(r)}`.slice(0, 200));
     off();
     await dash.close();
+});
+
+// The administrator changes the policy while the browser is running: Chrome
+// reloads the policy files on change (Linux), then updates storage.managed.
+phase('policy-change', async ( ) => {
+    const { cdp } = ctx;
+    const POLICY_FILE = '/etc/opt/chrome/policies/managed/ubo-enterprise-test.json';
+    const original = fs.readFileSync(POLICY_FILE, 'utf8');
+    const PROBE = '/probe/policy-change';
+    const FILTER = `||cdn.test${PROBE}^`;
+    const setFilters = filters => {
+        const policy = JSON.parse(original);
+        policy['3rdparty'].extensions[EXT_ID].toOverwrite.filters = filters;
+        fs.writeFileSync(POLICY_FILE, JSON.stringify(policy, null, 2));
+    };
+    // Not from site-a.test: a temporary `site-a.test cdn.test * block` rule
+    // is left in place by the session-rules phase.
+    const page = await cdp.newPage('http://site-b.test/frame.html');
+    const probe = async ( ) => {
+        await resetHits();
+        await pageFetch(page, `http://cdn.test${PROBE}`);
+        return await hitCount('cdn.test', PROBE) === 0;
+    };
+    const waitFor = async (blocked, timeout = 90000) => {
+        const t0 = Date.now();
+        while ( Date.now() - t0 < timeout ) {
+            if ( await probe().catch(( ) => !blocked) === blocked ) { return Date.now() - t0; }
+            await sleep(1000);
+        }
+    };
+    check('policy-change: probe not blocked before change', await probe() === false);
+    try {
+        setFilters([ ...TEST_FILTERS, FILTER ]);
+        let ms = await waitFor(true);
+        check('policy-change: filter added by the administrator in effect without browser restart',
+            ms !== undefined, `after ${ms} ms`);
+        const r = await pageFetch(page, 'http://ads.test/probe/policy-change-existing');
+        check('policy-change: existing admin filters still in effect', r.ok === false);
+        setFilters(TEST_FILTERS);
+        ms = await waitFor(false);
+        check('policy-change: filter removed by the administrator no longer in effect',
+            ms !== undefined, `after ${ms} ms`);
+    } finally {
+        fs.writeFileSync(POLICY_FILE, original);
+    }
+    await page.close();
 });
 
 phase('browser-restart', async ( ) => {

@@ -67,14 +67,15 @@ const appliedPromise = Promise.all([
     return managed;
 }).catch(( ) => undefined);
 
-// Guard against restart loops, i.e. a policy which keeps changing
+// Guard against restart loops, i.e. a policy which keeps changing. The
+// timestamps are kept in storage.local, since a reload clears storage.session.
 const canRestart = async ( ) => {
     const now = Date.now();
-    const bin = await chrome.storage.session.get(RESTARTS_KEY);
+    const bin = await chrome.storage.local.get(RESTARTS_KEY);
     const recent = (bin?.[RESTARTS_KEY] || []).filter(t => (now - t) < MAX_RESTARTS_PERIOD_MS);
     if ( recent.length >= MAX_RESTARTS ) { return false; }
     recent.push(now);
-    await chrome.storage.session.set({ [RESTARTS_KEY]: recent });
+    await chrome.storage.local.set({ [RESTARTS_KEY]: recent });
     return true;
 };
 
@@ -92,7 +93,6 @@ const checkPolicy = async startup => {
             return;
         }
         console.info('[uBO MV3] admin policy changed: restarting');
-        self.uBOmv3.stats.policyRestart = Date.now();
         chrome.runtime.reload();
     } catch (reason) {
         console.error(reason);
