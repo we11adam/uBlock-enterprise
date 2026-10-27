@@ -42,6 +42,7 @@ import logger from './logger.js';
 import publicSuffixList from './publicsuffix.js';
 import punycode from '../lib/punycode.js';
 import { redirectEngine } from './redirect-engine.js';
+import scriptletFilteringEngine from './scriptlet-filtering.js';
 import staticExtFilteringEngine from './static-ext-filtering.js';
 import { staticFilteringReverseLookup } from './reverselookup.js';
 import staticNetFilteringEngine from './static-net-filtering.js';
@@ -1346,7 +1347,11 @@ onBroadcast(msg => {
                 ),
             ]);
             if ( results.every(v => v) ) {
-                return µb.loadRedirectResources();
+                const success = await µb.loadRedirectResources();
+                // Scriptlets imported from resources are known to the
+                // scriptlet compiler only once the resources are loaded
+                scriptletFilteringEngine.resetCompiler();
+                return success;
             }
         }
         catch (reason) {

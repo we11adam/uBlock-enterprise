@@ -308,7 +308,13 @@ phase('sw-restart', async ( ) => {
     r = await frameRequest(page, 'fetch:http://cdn.test/probe/frame-control?cold');
     check('after SW restart: control request from frame passes', r.ok === true, JSON.stringify(r));
 
-    // Cold navigation: SW stopped, then a navigation
+    // Cold navigation: SW stopped, then a navigation. The engine is then
+    // loaded from the selfie, as in most restarts of the service worker.
+    // The selfie is normally created after a delay (timer or alarm): create it
+    // now, then let uBO save its asset cache registry (throttled by 3 s), as
+    // it would before the service worker is stopped for being idle.
+    await cdp.evalInWorker(EXT_ID, 'self.µBlock.selfieManager.create().then(( ) => true)');
+    await sleep(4000);
     await cdp.stopExtensionWorker(EXT_ID);
     await resetHits();
     const p2 = await cdp.newPage('http://site-a.test/');
@@ -318,6 +324,14 @@ phase('sw-restart', async ( ) => {
     // Scriptlet injection timing at cold start is a documented limitation:
     // reported, not asserted.
     checkSiteA('SW stopped -> navigation', await p2.evaluate(SITE_A_STATE), { info: true });
+    const fromSelfie = await cdp.evalInWorker(EXT_ID, 'self.µBlock.supportStats.allReadyAfter');
+    check('SW restart: engine loaded from selfie', /selfie/.test(fromSelfie), fromSelfie);
+    // Scriptlets imported from resources must also be available when the
+    // engine is loaded from the selfie
+    await p2.goto('http://cdn.test/');
+    await p2.goto('http://site-a.test/');
+    await sleep(500);
+    checkSiteA('SW restart from selfie, cross-site navigation', await p2.evaluate(SITE_A_STATE));
     await p2.close();
 
     // Alarms
