@@ -854,7 +854,9 @@ if ( webext.browserAction instanceof Object ) {
         if ( tabId === 0 ) { return; }
 
         const tab = await vAPI.tabs.get(tabId);
-        if ( tab === null ) { return; }
+        // A tab with TAB_ID_NONE has no toolbar action. Never pass its id to
+        // the action setters, even when the lookup itself succeeded.
+        if ( tab === null || tab.id < 0 ) { return; }
 
         const hasUnprocessedRequest = vAPI.net && vAPI.net.hasUnprocessedRequest(tabId);
         const { parts, state } = details;
