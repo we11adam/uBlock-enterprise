@@ -8,7 +8,7 @@
     "default_title": "uBO Enterprise",
     "default_popup": "popup-fenix.html"
   },
-  "author": "Raymond Hill & contributors (uBlock Origin); enterprise MV3 packaging: see README-ENTERPRISE",
+  "author": "Raymond Hill & contributors (uBlock Origin); enterprise MV3 packaging: unofficial build, see platform/chromium-enterprise/README.md in its source repository",
   "background": {
     "service_worker": "sw.js",
     "type": "module"
