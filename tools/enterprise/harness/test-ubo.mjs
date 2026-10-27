@@ -253,6 +253,8 @@ phase('cosmetic-scriptlets', async ( ) => {
     // compiling/updating filter lists: reported, not asserted.
     checkSiteA('shortly after install', await page.evaluate(SITE_A_STATE), { info: true });
     check('service worker idle', await waitWorkerIdle(cdp));
+    // Same-site navigations: see the scriptlet-timing phase
+    await page.goto('http://cdn.test/');
     await page.goto('http://site-a.test/');
     await sleep(500);
     checkSiteA('warm SW', await page.evaluate(SITE_A_STATE));
@@ -276,6 +278,55 @@ phase('cosmetic-scriptlets', async ( ) => {
     const leak = await p3.evaluate('({ c: window.uboTestConst, ls: localStorage.getItem("uboTestKey") })');
     check('site-specific scriptlets not injected on other sites', leak.c === undefined && leak.ls === null, JSON.stringify(leak));
     await p3.close();
+});
+
+// MAIN world scriptlets which must run before the page's own inline scripts
+// (set-constant, nofab), over repeated navigations. Scriptlets are injected
+// when the navigation is committed, as uBO MV2 does on Chromium, which races
+// with the parsing of the document by the renderer:
+// - a navigation in a new renderer process (new tab, cross-site navigation)
+//   is slow enough to start that the injection wins: asserted;
+// - a same-site navigation reuses the renderer process: the injection wins
+//   only if the HTML reaches the renderer some 20 ms after the response
+//   headers. Reported, not asserted (documented limitation).
+phase('scriptlet-timing', async ( ) => {
+    const { cdp } = ctx;
+    const N = Number(process.env.TIMING_RUNS || 10);
+    const MIN_RATIO = 0.9;
+    check('service worker idle', await waitWorkerIdle(cdp));
+    const onTime = s => s.atLoad?.uboTestConst === 42 && s.atLoad?.fab === 'object';
+    const report = (label, ok, asserted) => {
+        check(`MAIN scriptlets before inline page scripts: ${label}`,
+            ok >= N * MIN_RATIO, `${ok}/${N}`, { info: asserted !== true });
+    };
+    const tab = await cdp.newPage('about:blank');
+    for ( const bodydelay of [ 0, 10, 20, 50 ] ) {
+        let ok = 0;
+        for ( let i = 0; i < N; i++ ) {
+            await tab.goto(`http://site-a.test/?bodydelay=${bodydelay}&i=${i}`);
+            if ( onTime(await tab.evaluate(SITE_A_STATE)) ) { ok += 1; }
+        }
+        report(`same-site navigation, HTML body ${bodydelay} ms after headers`, ok, bodydelay >= 50);
+    }
+    {
+        let ok = 0;
+        for ( let i = 0; i < N; i++ ) {
+            await tab.goto(`http://cdn.test/?i=${i}`);
+            await tab.goto(`http://site-a.test/?i=${i}`);
+            if ( onTime(await tab.evaluate(SITE_A_STATE)) ) { ok += 1; }
+        }
+        report('cross-site navigation in same tab', ok, true);
+    }
+    await tab.close();
+    {
+        let ok = 0;
+        for ( let i = 0; i < N; i++ ) {
+            const p = await cdp.newPage(`http://site-a.test/?i=${i}`);
+            if ( onTime(await p.evaluate(SITE_A_STATE)) ) { ok += 1; }
+            await p.close();
+        }
+        report('new tab', ok, true);
+    }
 });
 
 phase('sw-restart', async ( ) => {
@@ -492,9 +543,11 @@ phase('browser-restart', async ( ) => {
     const r = await pageFetch(page, 'http://cdn.test/probe/fw?4');
     check('temporary rules reset on browser restart (same as MV2)', r.ok === true, JSON.stringify(r));
     check('service worker idle', await waitWorkerIdle(cdp));
+    // Same-site navigations: see the scriptlet-timing phase
+    await page.goto('http://cdn.test/');
     await page.goto('http://site-a.test/');
     await sleep(500);
-    checkSiteA('after cold start, reload', await page.evaluate(SITE_A_STATE));
+    checkSiteA('after cold start, navigation', await page.evaluate(SITE_A_STATE));
 });
 
 phase('upgrade', async ( ) => {
