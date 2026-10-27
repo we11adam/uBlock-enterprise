@@ -45,6 +45,8 @@ cp platform/chromium-enterprise/manifest.json $DES/
 # Chrome store-specific
 cp -R $DES/_locales/nb $DES/_locales/no
 
+echo "*** uBlock0.chromium-enterprise: Generating scriptlet library"
+node tools/enterprise/make-scriptlet-lib.mjs $DES
 
 echo "*** uBlock0.chromium-enterprise: Generating meta"
 python3 tools/enterprise/make-chromium-enterprise-meta.py $DES

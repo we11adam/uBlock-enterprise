@@ -78,7 +78,7 @@ function topFrameRulesMatcher(rules) {
     return rules.get('*') === true;
 }
 
-function initCommChannel(name) {
+export function initCommChannel(name) {
     if ( self.uBO_bcSecret ) { return; }
     try {
         const bcSecret = new self.BroadcastChannel(name);
@@ -142,7 +142,7 @@ export class ScriptletFilteringEngineEx extends ScriptletFilteringEngine {
         await templatesReady;
         await scripting.start((...args) =>
             this.getContentScripts(...args)
-        );
+        , this);
         this.#startListening();
     }
 
@@ -254,6 +254,62 @@ export class ScriptletFilteringEngineEx extends ScriptletFilteringEngine {
         }
         options.earlyBailoutCode = earlyBailoutCode.join('\n');
         return options;
+    }
+
+    // For platforms which can't inject code strings (MV3 enterprise build):
+    // same as getContentScripts(), except that the caller-provided templates
+    // are used to extract the data and the names of the scriptlet functions,
+    // and that the early bailout conditions are evaluated by the caller
+    // through isScriptletBailout().
+    getScriptletData(url, templates) {
+        const hostname = hostnameFromURI(url);
+        const domain = domainFromHostname(hostname);
+        const map = this.scriptletDB.retrieveOne(hostname, domain);
+        makeScriptlets.reset();
+        for ( const [ rawargs, details ] of map ) {
+            details.args = JSON.parse(rawargs);
+            details.trustedSource = true;
+            makeScriptlets.compile('uBlock', details);
+        }
+        const core = makeScriptlets.commit('uBlock', templates.core, '');
+        const framework = makeScriptlets.commitFramework(templates.begin, '', '');
+        this.warSecret = vAPI.warSecret.long(this.warSecret);
+        const scriptletGlobals = {
+            warOrigin: this.warOrigin,
+            warSecret: this.warSecret,
+        };
+        if ( logger.enabled ) {
+            scriptletGlobals.bcSecret = vAPI.generateSecret(3);
+            scriptletGlobals.logLevel = this.logLevel;
+        }
+        const worlds = {};
+        for ( const world of [ 'MAIN', 'ISOLATED' ] ) {
+            if ( core[world] === undefined ) { continue; }
+            worlds[world] = {
+                data: core[world].code,
+                functionRefs: framework[world].beginCode,
+            };
+        }
+        return { hostname, worlds, scriptletGlobals };
+    }
+
+    // Same logic as isTrustedContext() and topFrameRulesMatcher() above, for
+    // evaluation in the extension context.
+    isScriptletBailout(topURL) {
+        if ( µb.trustedSites.isTrusted(topURL) ) { return true; }
+        const topFrameRules = sessionFirewall.export1stPartyRules().filter(a =>
+            a[1] !== 'behind-the-scene'
+        );
+        if ( topFrameRules.length === 0 ) { return false; }
+        const rules = new Map(topFrameRules);
+        const hostname = hostnameFromURI(topURL);
+        let pos = 0;
+        do {
+            const value = rules.get(hostname.slice(pos));
+            if ( typeof value === 'boolean' ) { return value; }
+            pos = hostname.indexOf('.', pos) + 1;
+        } while ( pos !== 0 );
+        return rules.get('*') === true;
     }
 
     retrieve(request) {
