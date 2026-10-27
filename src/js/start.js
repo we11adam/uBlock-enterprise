@@ -441,7 +441,17 @@ const createDefaultProps = ( ) => {
     // https://github.com/chrisaljoudi/uBlock/issues/184
     //   Check for updates not too far in the future.
     io.addObserver(µb.assetObserver.bind(µb));
-    if ( µb.userSettings.autoUpdate ) {
+    // MV3 service worker: uBO is launched each time the service worker is
+    // restarted, while the launch-time update check is meant to occur once
+    // per browser session. Otherwise rely on the persistent alarm.
+    const isLaunchOfSession = vAPI.app.isFirstWakeOfSession instanceof Function
+        ? await vAPI.app.isFirstWakeOfSession()
+        : true;
+    if ( µb.userSettings.autoUpdate && isLaunchOfSession === false ) {
+        vAPI.alarms.createIfNotPresent('assetUpdater', {
+            delayInMinutes: µb.hiddenSettings.autoUpdatePeriod * 60,
+        });
+    } else if ( µb.userSettings.autoUpdate ) {
         let needEmergencyUpdate = false;
         const entries = await io.getUpdateAges({
             filters: µb.selectedFilterLists,

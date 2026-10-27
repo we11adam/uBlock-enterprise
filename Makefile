@@ -1,7 +1,7 @@
 # https://stackoverflow.com/a/6273809
 run_options := $(filter-out $@,$(MAKECMDGOALS))
 
-.PHONY: all clean cleanassets test lint chromium opera firefox npm dig \
+.PHONY: all clean cleanassets test lint chromium chromium-enterprise opera firefox npm dig \
 	mv3-chromium mv3-firefox mv3-edge mv3-safari ubol-codemirror \
 	compare maxcost medcost mincost modifiers record wasm \
 	publish-chromium publish-edge publish-firefox \
@@ -28,6 +28,12 @@ dist/build/uBlock0.chromium: tools/make-chromium.sh $(sources) $(platform) $(ass
 
 # Build the extension for Chromium.
 chromium: dist/build/uBlock0.chromium
+
+dist/build/uBlock0.chromium-enterprise: tools/make-chromium-enterprise.sh $(sources) $(platform) $(assets) $(wildcard tools/enterprise/*)
+	tools/make-chromium-enterprise.sh
+
+# Build the MV3 enterprise extension for Chromium (policy installation only).
+chromium-enterprise: dist/build/uBlock0.chromium-enterprise
 
 dist/build/uBlock0.opera: tools/make-opera.sh $(sources) $(platform) $(assets)
 	tools/make-opera.sh
