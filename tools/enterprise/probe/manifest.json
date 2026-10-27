@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "uBO enterprise MV3 feasibility probe",
+  "version": "1.0.0",
+  "description": "Checks blocking webRequest in an MV3 service worker for a policy-installed extension.",
+  "minimum_chrome_version": "138",
+  "background": { "service_worker": "sw.js", "type": "module" },
+  "host_permissions": [ "<all_urls>" ],
+  "permissions": [ "management", "storage", "webRequest", "webRequestBlocking" ]
+}
