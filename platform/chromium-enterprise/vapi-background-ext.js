@@ -149,6 +149,13 @@ vAPI.Net = class extends vAPI.Net {
 
 {
     const messaging = vAPI.messaging;
+    // Ports of the workers hosted by the offscreen document are not for uBO's
+    // messaging (see sw-env.js)
+    const onPortConnect = messaging.onPortConnect;
+    messaging.onPortConnect = function(port) {
+        if ( self.uBOmv3.isWorkerPort(port) ) { return; }
+        return onPortConnect.call(this, port);
+    };
     const onPortMessage = messaging.onPortMessage;
     const deferred = [];
     messaging.onPortMessage = function(request, port) {

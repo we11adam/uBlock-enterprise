@@ -286,6 +286,31 @@ const offscreen = (( ) => {
 // instance; its workers were terminated when their ports disconnected.
 offscreen.scheduleClose(10000);
 
+// The offscreen document opens the port of each worker to the service worker,
+// on request (see offscreen.js).
+const WORKER_PORT_PREFIX = 'uBO-worker|';
+const WORKER_CONNECT_TIMEOUT_MS = 10000;
+const workersAwaitingPort = new Map();
+let workerIdGenerator = 0;
+
+const isWorkerPort = port => port.name.startsWith(WORKER_PORT_PREFIX);
+
+// Must be registered synchronously, so that it receives the ports opened by
+// the offscreen document
+chrome.runtime.onConnect.addListener(port => {
+    if ( isWorkerPort(port) === false ) { return; }
+    const worker = workersAwaitingPort.get(port.name);
+    const { sender } = port;
+    const fromOffscreen = sender?.id === chrome.runtime.id &&
+        sender.tab === undefined &&
+        sender.url === chrome.runtime.getURL('offscreen.html');
+    if ( worker === undefined || fromOffscreen === false ) {
+        return port.disconnect();
+    }
+    workersAwaitingPort.delete(port.name);
+    worker.attach(port);
+});
+
 if ( typeof self.Worker !== 'function' ) {
     self.Worker = class extends EventTarget {
         constructor(url) {
@@ -296,28 +321,40 @@ if ( typeof self.Worker !== 'function' ) {
             this.port = null;
             this.queue = [];
             this.terminated = false;
+            workerIdGenerator += 1;
+            this.portName = `${WORKER_PORT_PREFIX}${Date.now()}-${workerIdGenerator}`;
             offscreen.acquire();
-            this.connect(path, 0);
+            this.start(path);
         }
-        async connect(path, attempt) {
+        async start(path) {
+            workersAwaitingPort.set(this.portName, this);
+            this.connectTimer = self.setTimeout(( ) => {
+                this.fail('worker relay not connected');
+            }, WORKER_CONNECT_TIMEOUT_MS);
             try {
                 await offscreen.ensure();
-            } catch (reason) {
-                return this.fail(`${reason}`);
-            }
-            if ( this.terminated ) { return; }
-            const port = chrome.runtime.connect({ name: `uBO-worker|${path}` });
-            let connected = false;
-            port.onMessage.addListener(msg => {
-                if ( msg === 'ready' ) {
-                    connected = true;
-                    this.port = port;
-                    for ( const data of this.queue ) {
-                        port.postMessage({ data });
-                    }
-                    this.queue = [];
-                    return;
+                let response;
+                // The offscreen document may not be listening yet
+                for ( let attempt = 0; attempt < 20; attempt++ ) {
+                    if ( this.terminated ) { return; }
+                    response = await chrome.runtime.sendMessage({
+                        uBOworker: { id: this.portName.slice(WORKER_PORT_PREFIX.length), path },
+                    }).catch(( ) => undefined);
+                    if ( response !== undefined ) { break; }
+                    await new Promise(r => { self.setTimeout(r, 50); });
                 }
+                if ( response?.ok !== true ) {
+                    throw response?.error || 'offscreen document not reachable';
+                }
+            } catch (reason) {
+                this.fail(`${reason}`);
+            }
+        }
+        attach(port) {
+            if ( this.terminated ) { return port.disconnect(); }
+            self.clearTimeout(this.connectTimer);
+            this.port = port;
+            port.onMessage.addListener(msg => {
                 if ( msg instanceof Object === false ) { return; }
                 if ( msg.error !== undefined ) {
                     return this.fail(msg.error);
@@ -331,14 +368,12 @@ if ( typeof self.Worker !== 'function' ) {
             port.onDisconnect.addListener(( ) => {
                 void chrome.runtime.lastError;
                 this.port = null;
-                if ( this.terminated ) { return; }
-                // The offscreen document may not be listening yet
-                if ( connected === false && attempt < 20 ) {
-                    self.setTimeout(( ) => { this.connect(path, attempt + 1); }, 50);
-                    return;
-                }
                 this.fail('worker relay disconnected');
             });
+            for ( const data of this.queue ) {
+                port.postMessage({ data });
+            }
+            this.queue = [];
         }
         fail(message) {
             if ( this.terminated ) { return; }
@@ -361,6 +396,8 @@ if ( typeof self.Worker !== 'function' ) {
             if ( this.terminated ) { return; }
             this.terminated = true;
             this.queue = [];
+            self.clearTimeout(this.connectTimer);
+            workersAwaitingPort.delete(this.portName);
             if ( this.port !== null ) {
                 this.port.disconnect();
                 this.port = null;
@@ -595,6 +632,7 @@ self.setTimeout(( ) => {
 }, 60000);
 
 self.uBOmv3 = {
+    isWorkerPort,
     lateRegistrations: state.lateRegistrations,
     stats: state.stats,
     get ready() {

@@ -398,10 +398,22 @@ phase('dashboard-offscreen', async ( ) => {
     let r = await lookup();
     check('filter reverse lookup (Worker in offscreen document)',
         JSON.stringify(r).includes('user-filters'), JSON.stringify(r).slice(0, 200));
+    // A port opened while the offscreen document exists must still be
+    // disconnected when the worker stops, so that the next message through
+    // the page's messaging wakes up the worker.
+    await dash.evaluate(`vAPI.messaging.destroyPort(), vAPI.messaging.send('default', { what: 'getWhitelist' })`);
     await cdp.stopExtensionWorker(EXT_ID);
     await sleep(Number(process.env.LOOKUP_DELAY ?? 1000));
     r = await lookup().catch(e => e.message);
-    check('filter reverse lookup after SW restart', `${JSON.stringify(r)}`.includes('user-filters'), `${JSON.stringify(r)}`.slice(0, 200));
+    const lookupOk = `${JSON.stringify(r)}`.includes('user-filters');
+    let diag = '';
+    if ( lookupOk === false ) {
+        diag = await cdp.evalInWorker(EXT_ID, `chrome.runtime.getContexts({}).then(c => JSON.stringify({
+            ready: self.uBOmv3.ready, stats: self.uBOmv3.stats, bridges: self.uBOmv3.bridges().filter(b => b.queued || b.waiting),
+            contexts: c.map(c => c.contextType + ':' + c.documentUrl),
+        }))`).catch(e => e.message);
+    }
+    check('filter reverse lookup after SW restart', lookupOk, `${JSON.stringify(r)}`.slice(0, 200) + ` ${diag}`);
     off();
     await dash.close();
 });
