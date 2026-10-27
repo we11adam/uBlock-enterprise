@@ -143,16 +143,85 @@ export class CDP {
 
     // Stop the extension service worker the same way Puppeteer's
     // `WebWorker.close()` does (Target.closeTarget on the worker target).
+    //
+    // The worker may be restarted at once by a pending event (i.e. a request
+    // or a message port from a content script), and the worker target can
+    // keep the same ID across restarts: the stop is detected through the
+    // target discovery events, without attaching to the worker (which would
+    // restart it).
     async stopExtensionWorker(extensionId) {
         const t = await this.extensionWorker(extensionId);
         if ( t === undefined ) { return false; }
-        await this.send('Target.closeTarget', { targetId: t.targetId });
-        const until = Date.now() + 10000;
-        while ( Date.now() < until ) {
-            if ( (await this.extensionWorker(extensionId)) === undefined ) { return true; }
-            await sleep(100);
+        await this.send('Target.setDiscoverTargets', { discover: true });
+        let destroyed = false;
+        const off = this.on(msg => {
+            if ( msg.method !== 'Target.targetDestroyed' ) { return; }
+            if ( msg.params.targetId === t.targetId ) { destroyed = true; }
+        });
+        try {
+            await this.send('Target.closeTarget', { targetId: t.targetId });
+            const until = Date.now() + 10000;
+            while ( Date.now() < until ) {
+                if ( destroyed ) { return true; }
+                const now = await this.extensionWorker(extensionId);
+                if ( now === undefined || now.targetId !== t.targetId ) { return true; }
+                await sleep(100);
+            }
+        } finally {
+            off();
         }
         throw new Error('extension worker did not stop');
+    }
+
+    // Attach to every instance of the extension service worker from its very
+    // start (paused until attached), and report its console messages and
+    // uncaught exceptions to `callback(instance, type, text)`.
+    async captureWorkerConsole(extensionId, callback) {
+        const prefix = `chrome-extension://${extensionId}/`;
+        const sessions = new Map();
+        let instance = 0;
+        this.on(msg => {
+            if ( msg.method === 'Target.attachedToTarget' ) {
+                const { sessionId, targetInfo, waitingForDebugger } = msg.params;
+                const resume = ( ) => waitingForDebugger
+                    ? this.send('Runtime.runIfWaitingForDebugger', {}, sessionId).catch(( ) => {})
+                    : undefined;
+                if ( targetInfo.type !== 'service_worker' || targetInfo.url.startsWith(prefix) === false ) {
+                    resume();
+                    return;
+                }
+                instance += 1;
+                sessions.set(sessionId, instance);
+                callback(instance, `start ${targetInfo.targetId.slice(0, 6)}`, targetInfo.url);
+                this.send('Runtime.enable', {}, sessionId).catch(( ) => {}).then(resume);
+                return;
+            }
+            const n = sessions.get(msg.sessionId);
+            if ( n === undefined ) { return; }
+            if ( msg.method === 'Runtime.consoleAPICalled' ) {
+                callback(n, msg.params.type, msg.params.args.map(a =>
+                    a.value ?? a.description ?? a.type
+                ).join(' '));
+            } else if ( msg.method === 'Runtime.exceptionThrown' ) {
+                const d = msg.params.exceptionDetails;
+                callback(n, 'exception', d.exception?.description || d.text);
+            }
+        });
+        await this.send('Target.setAutoAttach', {
+            autoAttach: true,
+            waitForDebuggerOnStart: true,
+            flatten: true,
+            filter: [ { type: 'service_worker', exclude: false }, { exclude: true } ],
+        });
+        // An already running instance
+        const t = await this.extensionWorker(extensionId);
+        if ( t !== undefined ) {
+            const sessionId = await this.attach(t.targetId);
+            instance += 1;
+            sessions.set(sessionId, instance);
+            callback(instance, 'attached', t.url);
+            await this.send('Runtime.enable', {}, sessionId);
+        }
     }
 
     async newPage(url = 'about:blank') {

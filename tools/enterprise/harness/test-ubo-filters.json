@@ -1,0 +1,17 @@
+[
+  "||ads.test^",
+  "@@||ads.test/probe/allowed^",
+  "||tracker.test/t.js$script,redirect=noop.js",
+  "site-a.test##.ad-banner",
+  "site-a.test###proc:has-text(procedural)",
+  "site-a.test##+js(set-constant, uboTestConst, 42)",
+  "site-a.test##+js(nofab)",
+  "site-a.test##+js(noeval)",
+  "site-a.test##+js(set-attr, #iso-target, data-ubo, true)",
+  "site-a.test##+js(set-local-storage-item, uboTestKey, true)",
+  "||site-a.test/probe/param$removeparam=utm_source",
+  "||site-a.test/probe/strict^$document",
+  "||site-b.test/csp-inject.html$csp=script-src 'none'",
+  "site-b.test##.frame-ad",
+  "||cdn.test/probe/frame-only$domain=site-b.test"
+]

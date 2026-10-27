@@ -11,6 +11,9 @@ Local, controllable test web server for the enterprise MV3 harness.
   reach the network?".
 - /probe/* endpoints return small text bodies; /probe/headers sets
   X-Probe-Remove so header modification can be checked.
+- `bodydelay=<ms>` in the query string: the response headers are sent at
+  once, the body after the delay, as with a document streamed over a real
+  network (the navigation commits before the body is received).
 """
 
 import argparse
@@ -20,7 +23,7 @@ import os
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 HITS = []
 LOCK = threading.Lock()
@@ -32,7 +35,7 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
-    def _send(self, code, body, ctype='text/plain; charset=utf-8', headers=None):
+    def _send(self, code, body, ctype='text/plain; charset=utf-8', headers=None, bodydelay=0):
         if isinstance(body, str):
             body = body.encode('utf-8')
         self.send_response(code)
@@ -44,6 +47,9 @@ class Handler(BaseHTTPRequestHandler):
         for k, v in (headers or {}).items():
             self.send_header(k, v)
         self.end_headers()
+        if bodydelay > 0:
+            self.wfile.flush()
+            time.sleep(bodydelay / 1000)
         if self.command != 'HEAD':
             self.wfile.write(body)
 
@@ -100,7 +106,8 @@ class Handler(BaseHTTPRequestHandler):
         if os.path.isfile(csp_path):
             with open(csp_path) as f:
                 extra['Content-Security-Policy'] = f.read().strip()
-        return self._send(200, body, ctype, extra)
+        bodydelay = parse_qs(parts.query).get('bodydelay', ['0'])[0]
+        return self._send(200, body, ctype, extra, int(bodydelay) if bodydelay.isdigit() else 0)
 
 
 def main():

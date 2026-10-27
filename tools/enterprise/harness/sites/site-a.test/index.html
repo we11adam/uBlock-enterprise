@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>site-a</title>
+<script>
+// Values observed by the scriptlets at the time the page's own scripts run
+window.atLoad = {
+    uboTestConst: window.uboTestConst,
+    fab: typeof window.fuckAdBlock,
+};
+try { window.evalResult = eval('1+1'); } catch (e) { window.evalResult = 'error'; }
+</script>
+<script src="http://tracker.test/t.js" onload="window.trackerEvent='load'" onerror="window.trackerEvent='error'"></script>
+</head>
+<body>
+<div class="ad-banner" id="ad">ad</div>
+<div class="content" id="content">content</div>
+<div id="iso-target">iso</div>
+<div id="proc">procedural</div>
+<img id="adimg" src="http://ads.test/banner.png">
+<iframe id="frame" src="http://site-b.test/frame.html"></iframe>
+</body>
+</html>

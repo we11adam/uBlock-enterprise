@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>site-b frame</title></head>
+<body>
+<div class="frame-ad" id="frame-ad">frame ad</div>
+<div id="frame-content">frame content</div>
+<img src="http://cdn.test/probe/frame-only?load">
+<img src="http://cdn.test/probe/frame-control?load">
+<script>
+// The embedding page asks the frame to issue requests, so that the requests
+// originate from this (cross-site) frame at a time chosen by the test.
+window.addEventListener('message', async ev => {
+    if ( ev.data === 'state' ) {
+        const ad = document.getElementById('frame-ad');
+        ev.source.postMessage({ frameState: {
+            adDisplay: getComputedStyle(ad).display,
+            contentDisplay: getComputedStyle(document.getElementById('frame-content')).display,
+        } }, '*');
+        return;
+    }
+    if ( typeof ev.data !== 'string' || ev.data.startsWith('fetch:') === false ) { return; }
+    const url = ev.data.slice(6);
+    let result;
+    try {
+        const r = await fetch(url, { cache: 'no-store' });
+        result = { url, ok: true, text: await r.text() };
+    } catch (e) {
+        result = { url, ok: false, error: String(e) };
+    }
+    ev.source.postMessage({ frameFetch: result }, '*');
+});
+window.parent.postMessage({ frameReady: true }, '*');
+</script>
+</body>
+</html>
