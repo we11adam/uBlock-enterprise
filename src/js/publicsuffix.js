@@ -21,6 +21,10 @@
 
 /******************************************************************************/
 
+// Static import: no top-level await, so that this module can be part of a
+// service worker module graph (MV3).
+import publicSuffixList from '../lib/publicsuffixlist/publicsuffixlist.js';
+
 const publicSuffix = globalThis.browser?.publicSuffix;
 
 export default publicSuffix ? {
@@ -31,6 +35,4 @@ export default publicSuffix ? {
         };
         return '';
     },
-} : await import('../lib/publicsuffixlist/publicsuffixlist.js').then(module =>
-    module['default']
-);
+} : publicSuffixList;

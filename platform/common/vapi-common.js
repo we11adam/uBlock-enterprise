@@ -158,7 +158,7 @@ vAPI.webextFlavor = {
     const flavor = vAPI.webextFlavor;
     const soup = flavor.soup;
     const dispatch = function() {
-        window.dispatchEvent(new CustomEvent('webextFlavor'));
+        self.dispatchEvent(new CustomEvent('webextFlavor'));
     };
 
     // This is always true.
@@ -176,7 +176,9 @@ vAPI.webextFlavor = {
         soup.add('mobile');
     }
 
-    if ( CSS.supports('selector(a:has(b))') ) {
+    // No `CSS` in a service worker (MV3): all Chromium versions supporting
+    // MV3 enterprise builds support native `:has()`.
+    if ( typeof CSS === 'undefined' || CSS.supports('selector(a:has(b))') ) {
         soup.add('native_css_has');
     }
 

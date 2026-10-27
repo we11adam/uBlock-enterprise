@@ -21,9 +21,10 @@
 
 /******************************************************************************/
 
+// `Element` and `document` do not exist in a service worker (MV3).
 const i18n =
     self.browser instanceof Object &&
-    self.browser instanceof Element === false
+    (typeof Element === 'undefined' || self.browser instanceof Element === false)
         ? self.browser.i18n
         : self.chrome.i18n;
 
@@ -31,7 +32,8 @@ const i18n$ = (...args) => i18n.getMessage(...args);
 
 /******************************************************************************/
 
-const isBackgroundProcess = document.title === 'uBlock Origin Background Page';
+const isBackgroundProcess = typeof document === 'undefined' ||
+    document.title === 'uBlock Origin Background Page';
 
 if ( isBackgroundProcess !== true ) {
 

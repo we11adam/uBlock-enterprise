@@ -39,15 +39,17 @@ import µb from './background.js';
 
 /******************************************************************************/
 
-const [
-    templateBegin,
-    templateCore,
-    templateEnd,
-] = await Promise.all([
+// No top-level await: this module must be usable in a service worker module
+// graph (MV3), where top-level await would delay registration of event
+// listeners. The templates are needed only once start() has been called.
+let templateBegin, templateCore, templateEnd;
+const templatesReady = Promise.all([
     fetch('/js/scriptlet-begin.template.js').then(response => response.text()),
     fetch('/js/scriptlet.template.js').then(response => response.text()),
     fetch('/js/scriptlet-end.template.js').then(response => response.text()),
-]);
+]).then(templates => {
+    [ templateBegin, templateCore, templateEnd ] = templates;
+});
 
 /******************************************************************************/
 
@@ -137,6 +139,7 @@ export class ScriptletFilteringEngineEx extends ScriptletFilteringEngine {
 
     async start() {
         cacheStorage.remove('makescriptletsCommitResult');
+        await templatesReady;
         await scripting.start((...args) =>
             this.getContentScripts(...args)
         );

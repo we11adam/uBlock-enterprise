@@ -39,8 +39,10 @@ vAPI.cantWebsocket =
 
 vAPI.canWASM = vAPI.webextFlavor.soup.has('chromium') === false;
 if ( vAPI.canWASM === false ) {
-    const csp = manifest.content_security_policy;
-    vAPI.canWASM = csp !== undefined && csp.indexOf("'wasm-unsafe-eval'") !== -1;
+    // MV3: content_security_policy is an object
+    let csp = manifest.content_security_policy;
+    if ( csp instanceof Object ) { csp = csp.extension_pages; }
+    vAPI.canWASM = typeof csp === 'string' && csp.includes("'wasm-unsafe-eval'");
 }
 
 /******************************************************************************/
@@ -745,7 +747,7 @@ if ( webext.browserAction instanceof Object ) {
 
 {
     const browserAction = vAPI.browserAction;
-    const titleTemplate = `${browser.runtime.getManifest().browser_action.default_title} ({badge})`;
+    const titleTemplate = `${(manifest.browser_action || manifest.action).default_title} ({badge})`;
     const icons = [
         { path: {
             '16': 'img/icon_16-off.png',
@@ -780,6 +782,8 @@ if ( webext.browserAction instanceof Object ) {
         // Firefox uses an internal cache for each setIcon's paths:
         // https://searchfox.org/mozilla-central/rev/5ff2d7683078c96e4b11b8a13674daded935aa44/browser/components/extensions/parent/ext-browserAction.js#631
         if ( vAPI.webextFlavor.soup.has('chromium') === false ) { return; }
+        // No DOM in a service worker (MV3): setIcon() with paths is used.
+        if ( typeof Image !== 'function' ) { return; }
 
         const imgs = [];
         for ( let i = 0; i < icons.length; i++ ) {
@@ -906,7 +910,7 @@ if ( webext.browserAction instanceof Object ) {
     };
 }
 
-browser.browserAction.onClicked.addListener(function(tab) {
+(browser.browserAction || browser.action).onClicked.addListener(function(tab) {
     vAPI.tabs.open({
         select: true,
         url: `popup-fenix.html?tabId=${tab.id}&intab=1`,
@@ -1592,12 +1596,12 @@ vAPI.cloud = (( ) => {
 
     // The real actual webextFlavor value may not be set in stone, so listen
     // for possible future changes.
-    window.addEventListener('webextFlavor', function() {
+    self.addEventListener('webextFlavor', function() {
         maxChunkSize = evalMaxChunkSize();
     }, { once: true });
 
     const options = {
-        defaultDeviceName: window.navigator.platform,
+        defaultDeviceName: self.navigator.platform,
         deviceName: undefined,
     };
 
