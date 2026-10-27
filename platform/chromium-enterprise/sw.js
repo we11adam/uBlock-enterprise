@@ -30,3 +30,4 @@
 
 import './js/sw-env.js';
 import './js/start.js';
+import './js/sw-session.js';
