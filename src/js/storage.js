@@ -42,7 +42,6 @@ import logger from './logger.js';
 import publicSuffixList from './publicsuffix.js';
 import punycode from '../lib/punycode.js';
 import { redirectEngine } from './redirect-engine.js';
-import scriptletFilteringEngine from './scriptlet-filtering.js';
 import staticExtFilteringEngine from './static-ext-filtering.js';
 import { staticFilteringReverseLookup } from './reverselookup.js';
 import staticNetFilteringEngine from './static-net-filtering.js';
@@ -1337,7 +1336,9 @@ onBroadcast(msg => {
     const load = async function() {
         if ( µb.selfieIsInvalid ) { return false; }
         try {
-            const results = await Promise.all([
+            let r = await µb.loadRedirectResources();
+            if ( r !== true ) { return r; }
+            r = await Promise.all([
                 loadMain(),
                 io.fromCache('selfie/staticExtFilteringEngine').then(selfie =>
                     staticExtFilteringEngine.fromSelfie(selfie)
@@ -1346,13 +1347,7 @@ onBroadcast(msg => {
                     staticNetFilteringEngine.fromSelfie(selfie)
                 ),
             ]);
-            if ( results.every(v => v) ) {
-                const success = await µb.loadRedirectResources();
-                // Scriptlets imported from resources are known to the
-                // scriptlet compiler only once the resources are loaded
-                scriptletFilteringEngine.resetCompiler();
-                return success;
-            }
+            return r.every(v => v);
         }
         catch (reason) {
             ubolog(reason);

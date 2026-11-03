@@ -124,6 +124,7 @@ const CONTENTSCRIPT_DICT_MAX_LOW = 128;
 const CONTENTSCRIPT_DICT_MAX_HIGH = CONTENTSCRIPT_DICT_MAX_LOW +
     (CONTENTSCRIPT_DICT_MAX_LOW >>> 3);
 const sentinel = self.crypto.randomUUID();
+const reIsHTTP = /^https?:\/\//;
 const tabDict = new Map();
 const contentScriptDict = new Map();
 let getContentScripts;
@@ -134,7 +135,7 @@ function getEffectiveURL(tabId, frameId) {
     const { frameDict } = tabData;
     let frameData = frameDict.get(frameId);
     for (;;) {
-        if ( /^https?:/.test(frameData.url) ) { break; }
+        if ( reIsHTTP.test(frameData.url) ) { break; }
         frameId = frameData.parentId;
         if ( frameId === -1 ) { break; }
         frameData = frameDict.get(frameId);
@@ -143,17 +144,30 @@ function getEffectiveURL(tabId, frameId) {
     return frameData.url;
 }
 
-function prepareContentScript(url) {
+function getTopOrigin(tabId) {
+    try {
+        const url = new URL(tabDict.get(tabId)?.frameDict.get(0)?.url);
+        return url.origin;
+    } catch {
+    }
+}
+
+function prepareContentScript(url, tabId = -1) {
     const hostname = hostnameFromURI(url);
     const entry = contentScriptDict.get(hostname) ??
         { t: Date.now(), hostname };
-    if ( hostname !== '' && entry.manuallyInjectedCode === undefined ) {
-        const result = getContentScripts(url);
+    if ( entry.manuallyInjectedCode !== undefined ) { return entry; }
+    if ( hostname !== '' ) {
+        const result = getContentScripts(url,
+            tabId !== -1 ? { topOrigin: getTopOrigin(tabId) } : undefined
+        );
         entry.manuallyInjectedCode = uBO_assembleLegacyCode(result) ?? null;
         if ( vAPI.webextFlavor.major >= 128 ) {
             entry.isolatedCode = uBO_assembleCode('isolated', result.isolatedCode, result);
             entry.mainCode = uBO_assembleCode('main', result.mainCode, result);
         }
+    } else {
+        entry.manuallyInjectedCode = null;
     }
     contentScriptDict.set(hostname, entry);
     return entry;
@@ -172,7 +186,6 @@ function registerContentScript(entry) {
                 matchOriginAsFallback: true,
                 matches: [ `http://${hostname}/*`, `https://${hostname}/*` ],
                 runAt: 'document_start',
-                world: 'ISOLATED',
             }).then(handle => {
                 entry.isolatedHandle = handle;
             }).catch(( ) => {
@@ -263,26 +276,42 @@ function onBeforeNavigate(details) {
     if ( frameId === 0 ) {
         frameDict.clear();
     }
-    const frameData = { frameId, parentId: details.parentFrameId, url };
-    frameDict.set(frameId, frameData);
-    if ( frameId !== 0 && url.startsWith('about:') ) {
+    frameDict.set(frameId, { frameId, parentId: details.parentFrameId, url });
+    // Every 64 frames, we rebuild to ensure no unbound growth as there is no
+    // API for removed frames
+    // TODO: spin off frames management to be reused across all of uBO
+    if ( (frameDict.size & 0b111111) === 0 ) {
+        const key = self.crypto.randomUUID();
+        tabData.gettingFrames = key;
+        browser.webNavigation.getAllFrames({ tabId }).then(frames => {
+            if ( tabData.gettingFrames !== key ) { return; }
+            if ( tabDict.has(tabId) === false ) { return; }
+            frameDict.clear();
+            for ( const { frameId, parentFrameId, url } of frames ) {
+                frameDict.set(frameId, { frameId, parentId: parentFrameId, url });
+            }
+        });
+    }
+    if ( frameId !== 0 && reIsHTTP.test(url) === false ) {
         url = getEffectiveURL(tabId, frameId);
         if ( url === undefined ) { return; }
     }
-    prepareContentScript(url);
+    if ( reIsHTTP.test(url) === false ) { return; }
+    prepareContentScript(url, tabId);
 }
 
 function onCommitted(details) {
     const { tabId } = details;
     if ( tabId < 0 ) { return; }
     let { frameId, url } = details;
-    if ( frameId !== 0 && url.startsWith('about:') ) {
+    if ( frameId !== 0 && reIsHTTP.test(url) === false ) {
         url = getEffectiveURL(tabId, frameId);
         if ( url === undefined ) { return; }
     }
+    if ( reIsHTTP.test(url) === false ) { return; }
     const hostname = hostnameFromURI(url);
     if ( hostname === '' ) { return; }
-    const entry = contentScriptDict.get(hostname) ?? prepareContentScript(url);
+    const entry = contentScriptDict.get(hostname) ?? prepareContentScript(url, tabId);
     if ( entry.registered !== true ) {
         manuallyInject(tabId, frameId, entry);
         registerContentScript(entry);
