@@ -8,6 +8,20 @@
 - 扩展名称：“uBO Enterprise (unofficial build of uBlock Origin)”，与上游区分。
 - 部署：见 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
+## 使用部署 skill
+
+仓库附带 [ubo-workspace-deploy](../../.agents/skills/ubo-workspace-deploy/SKILL.md)，
+供其他部署者使用自己的 Google Workspace、目标 OU、HTTPS 主机和生产密钥，
+完成首次安装、策略配置、升级及验收。在支持仓库 skill 的 Codex 中打开此仓库后使用：
+
+```text
+使用 $ubo-workspace-deploy，帮我将 uBO Enterprise 部署到自己的 Google Workspace。
+```
+
+也可以把整个 `.agents/skills/ubo-workspace-deploy` 目录复制到个人的
+`~/.agents/skills/` 中安装；部署时仍需要本仓库的完整代码。skill 不包含部署账号、
+生产密钥或注册令牌，部署者需要提供自己的环境参数和相应权限。
+
 ## 前提
 
 Chrome 只对**通过策略安装**的扩展开放 MV3 下的 `webRequestBlocking`。普通安装

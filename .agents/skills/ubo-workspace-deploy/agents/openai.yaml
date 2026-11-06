@@ -1,0 +1,4 @@
+interface:
+  display_name: "uBO Workspace 部署"
+  short_description: "使用自己的 Google Workspace 构建、签名、托管和部署 uBO Enterprise"
+  default_prompt: "使用 $ubo-workspace-deploy，帮我将 uBO Enterprise 部署到自己的 Google Workspace，并验证浏览器安装与升级。"
