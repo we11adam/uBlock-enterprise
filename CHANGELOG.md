@@ -1,3 +1,30 @@
+- [[security] Conceal DOM of overlay-based tools inside a shadow DOM](https://github.com/gorhill/uBlock/commit/1765528bec)
+
+----------
+
+# 1.76.4
+
+- [[security] Address remaining reported security issues](https://github.com/gorhill/uBlock/commit/5466554104)
+- [[generic cosmetic filtering] Fix extraneous function argument](https://github.com/gorhill/uBlock/commit/e8efba123b)
+- [[filter parser] Non-leading tag names must be preceded by whitespace](https://github.com/gorhill/uBlock/commit/a63712e39c)
+- [[security] Removed no longer used warOrigin/warSecret](https://github.com/gorhill/uBlock/commit/73ef1b23f7)
+
+----------
+
+# 1.76.2
+
+- [[diff updater] Use canonical patch URL to prevent duplicate fetches](https://github.com/gorhill/uBlock/commit/736ef4d100)
+- [[element picker] Increase delay before establishing communication](https://github.com/gorhill/uBlock/commit/f00b8ae693)
+- [[firefox] Update fallback version extraction to 128](https://github.com/gorhill/uBlock/commit/3a0c64184d)
+- [Improve `json-edit` scriptlet](https://github.com/gorhill/uBlock/commit/d4d6e75001)
+
+----------
+
+# 1.76.0
+
+- [[security] "Universal XSS from website-driven element picker"](https://github.com/gorhill/uBlock/commit/cbb22a5eee)
+- [Prevent `war:`-related filters for the time being](https://github.com/gorhill/uBlock/commit/150df125fd)
+- [Validate about to be created filter in element picker](https://github.com/gorhill/uBlock/commit/b1f7d27c87)
 - [Prevent re-entrancy with recursive operator in JSONPath](https://github.com/gorhill/uBlock/commit/b6fec9089f)
 - [Improve `[trusted-]edit-inbound-object` scriptlet](https://github.com/gorhill/uBlock/commit/a20cfcebd8)
 - [Add support for iso-8850-2 in response body filtering code](https://github.com/gorhill/uBlock/commit/ca7aa6c55f)
@@ -13,6 +40,12 @@
 - [Improve jsonl-edit-fetch-response/jsonl-edit-xhr-response scriptlets](https://github.com/gorhill/uBlock/commit/42bcca027b)
 - [Export "My filters" content as an array in JSON backup file](https://github.com/gorhill/uBlock/commit/80f5a99fe4)
 - [Improve `prevent-clipboard-write` scriptlet](https://github.com/gorhill/uBlock/commit/e530864c46)
+
+----------
+
+# 1.75.4
+
+- [Launch element picker only with a verified secret token](https://github.com/gorhill/uBlock/commit/9859477ebc)
 
 ----------
 

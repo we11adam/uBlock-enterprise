@@ -140,7 +140,7 @@ export class ScriptletFilteringEngineEx extends ScriptletFilteringEngine {
     constructor() {
         super();
         this.warOrigin = vAPI.getURL('/web_accessible_resources');
-        this.warSecret = undefined;
+        this.warSecret = vAPI.warSecret.long();
         this.isDevBuild = undefined;
         this.logLevel = 1;
     }
@@ -156,6 +156,7 @@ export class ScriptletFilteringEngineEx extends ScriptletFilteringEngine {
 
     reset() {
         super.reset();
+        this.warSecret = vAPI.warSecret.long(this.warSecret);
         scripting.reset();
         makeScriptlets.resetAll();
     }
@@ -223,13 +224,10 @@ export class ScriptletFilteringEngineEx extends ScriptletFilteringEngine {
                 µb.hiddenSettings.filterAuthorMode;
         }
         const scriptletGlobals = {
-            warOrigin: this.warOrigin,
-            warSecret: this.warSecret,
         };
         if ( options.topOrigin ) {
             scriptletGlobals.topOrigin = options.topOrigin;
         }
-        this.warSecret = vAPI.warSecret.long(this.warSecret);
         const out = { hostname, scriptletGlobals };
         if ( logger.enabled ) {
             scriptletGlobals.bcSecret = vAPI.generateSecret(3);
@@ -282,10 +280,7 @@ export class ScriptletFilteringEngineEx extends ScriptletFilteringEngine {
         }
         const core = makeScriptlets.commit('uBlock', templates.core, '');
         const framework = makeScriptlets.commitFramework(templates.begin, '', '');
-        this.warSecret = vAPI.warSecret.long(this.warSecret);
         const scriptletGlobals = {
-            warOrigin: this.warOrigin,
-            warSecret: this.warSecret,
         };
         if ( logger.enabled ) {
             scriptletGlobals.bcSecret = vAPI.generateSecret(3);

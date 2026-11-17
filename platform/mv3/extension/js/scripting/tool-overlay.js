@@ -36,15 +36,7 @@ self.ubolOverlay = {
     url: new URL(document.baseURI),
     port: null,
     highlightedElements: [],
-    secretAttr: (( ) => {
-        let secret = String.fromCharCode((Math.random() * 26) + 97);
-        do {
-            secret += (Math.floor(Math.random() * 2147483647) + 2147483647)
-                .toString(36)
-                .slice(2);
-        } while ( secret.length < 8 );
-        return secret;
-    })(),
+    secretAttr: self.crypto.randomUUID().replaceAll('-', '').slice(16),
 
     start() {
         const cssStyle = [
@@ -75,10 +67,11 @@ self.ubolOverlay = {
             'z-index: 2147483647',
             ''
         ].join(' !important;\n');
+        const escapedSecretAttr = CSS.escape(this.secretAttr);
         this.pickerCSS = [
-            `:root > [${this.secretAttr}] { ${cssStyle} }`,
-            `:root > [${this.secretAttr}-loaded] { visibility: visible !important; }`,
-            `:root > [${this.secretAttr}-click] { pointer-events: none !important; }`,
+            `[${escapedSecretAttr}] { ${cssStyle} }`,
+            `[${escapedSecretAttr}][loaded] { visibility: visible !important; }`,
+            `[${escapedSecretAttr}][clicked] { pointer-events: none !important; }`,
         ].join('\n');
         self.addEventListener('scroll', this.onViewportChanged, { passive: true });
         self.addEventListener('resize', this.onViewportChanged, { passive: true });
@@ -94,6 +87,10 @@ self.ubolOverlay = {
         self.removeEventListener('scroll', this.onViewportChanged, { passive: true });
         self.removeEventListener('resize', this.onViewportChanged, { passive: true });
         self.removeEventListener('keydown', this.onKeyPressed, true);
+        if ( this.frameContainer ) {
+            this.frameContainer.remove();
+            this.frameContainer = null;
+        }
         if ( this.frame ) {
             this.frame.remove();
             this.frame = null;
@@ -121,7 +118,7 @@ self.ubolOverlay = {
         }
     },
 
-    sendMessage(msg) {
+    async sendMessage(msg) {
         try {
             return this.webext.runtime.sendMessage(msg).catch(( ) => { });
         } catch {
@@ -286,14 +283,13 @@ self.ubolOverlay = {
         } else {
             return null;
         }
-        const magicAttr = `${this.secretAttr}-click`;
-        this.frame.setAttribute(magicAttr, '');
+        this.frame.setAttribute('clicked', '');
         let elem = document.elementFromPoint(x, y);
         if ( elem === document.body || elem === document.documentElement ) {
             elem = null;
         }
         // https://github.com/uBlockOrigin/uBlock-issues/issues/380
-        this.frame.removeAttribute(magicAttr);
+        this.frame.removeAttribute('clicked');
         return elem;
     },
 
@@ -314,49 +310,59 @@ self.ubolOverlay = {
     async install(file, onmessage) {
         this.file = file;
         const dynamicURL = new URL(this.webext.runtime.getURL(file));
-        return new Promise(resolve => {
-            const frame = document.createElement('iframe');
-            const secretAttr = this.secretAttr;
-            frame.setAttribute(secretAttr, '');
-            frame.style.visibility = 'hidden';
-            const onLoad = ( ) => {
-                frame.onload = null;
-                frame.setAttribute(`${secretAttr}-loaded`, '');
-                const channel = new MessageChannel();
-                const port = channel.port1;
-                port.onmessage = ev => {
-                    if ( Boolean(self.ubolOverlay) === false ) { return; }
-                    self.ubolOverlay.onMessage(ev.data || {});
-                };
-                port.onmessageerror = ( ) => {
-                    if ( Boolean(self.ubolOverlay) === false ) { return; }
-                    self.ubolOverlay.onMessage({ what: 'quitTool' });
-                };
-                const realURL = new URL(dynamicURL);
-                realURL.hostname =
-                    self.ubolOverlay.webext.i18n.getMessage('@@extension_id');
-                frame.contentWindow.postMessage(
-                    {
-                        what: 'startOverlay',
-                        url: document.baseURI,
-                        width: self.innerWidth,
-                        height: self.innerHeight,
-                    },
-                    realURL.origin,
-                    [ channel.port2 ]
-                );
-                frame.contentWindow.focus();
-                self.ubolOverlay.onmessage = onmessage;
-                self.ubolOverlay.port = port;
-                self.ubolOverlay.frame = frame;
-                resolve(true);
-            };
-            frame.onload = ( ) => {
-                frame.onload = onLoad;
-                frame.contentWindow.location = dynamicURL.href;
-            };
-            document.documentElement.append(frame);
+        const toolOverlaySecret = await this.sendMessage({
+            what: 'getToolOverlaySecret'
         });
+        const { promise, resolve } = Promise.withResolvers();
+        const frame = document.createElement('iframe');
+        const secretAttr = this.secretAttr;
+        frame.setAttribute(secretAttr, '');
+        frame.style.visibility = 'hidden';
+        const onLoad = ( ) => {
+            frame.onload = null;
+            frame.setAttribute('loaded', '');
+            const channel = new MessageChannel();
+            const port = channel.port1;
+            port.onmessage = ev => {
+                if ( Boolean(self.ubolOverlay) === false ) { return; }
+                self.ubolOverlay.onMessage(ev.data || {});
+            };
+            port.onmessageerror = ( ) => {
+                if ( Boolean(self.ubolOverlay) === false ) { return; }
+                self.ubolOverlay.onMessage({ what: 'quitTool' });
+            };
+            const realURL = new URL(dynamicURL);
+            realURL.hostname =
+                self.ubolOverlay.webext.i18n.getMessage('@@extension_id');
+            frame.contentWindow.postMessage(
+                {
+                    what: 'startOverlay',
+                    secret: toolOverlaySecret,
+                    url: document.baseURI,
+                    width: self.innerWidth,
+                    height: self.innerHeight,
+                },
+                realURL.origin,
+                [ channel.port2 ]
+            );
+            frame.contentWindow.focus();
+            self.ubolOverlay.onmessage = onmessage;
+            self.ubolOverlay.port = port;
+            self.ubolOverlay.frame = frame;
+            resolve(true);
+        };
+        frame.onload = ( ) => {
+            frame.onload = onLoad;
+            frame.contentWindow.location = dynamicURL.href;
+        };
+        this.frameContainer = document.createElement('div');
+        const shadowRoot = this.frameContainer.attachShadow({
+            mode: 'closed',
+            delegatesFocus: true,
+        });
+        shadowRoot.append(frame);
+        document.documentElement.append(this.frameContainer);
+        return promise;
     },
 };
 
