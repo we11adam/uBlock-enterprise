@@ -35,9 +35,9 @@ id="$(node tools/enterprise/crx3.mjs id --key "$key")"
 echo "*** test extension ID: $id (test key -- not the production ID)"
 
 if [ "${SKIP_BUILD:-}" != "1" ]; then
-    UBO_ENT_VERSION="$v2" tools/make-chromium-enterprise.sh
+    UBO_ENT_TEST_VERSION="$v2" tools/make-chromium-enterprise.sh
     node tools/enterprise/crx3.mjs pack --dir "$build" --key "$key" --out "$work/ubo-v2.crx"
-    UBO_ENT_VERSION="$v1" tools/make-chromium-enterprise.sh
+    UBO_ENT_TEST_VERSION="$v1" tools/make-chromium-enterprise.sh
     node tools/enterprise/crx3.mjs pack --dir "$build" --key "$key" --out "$work/ubo.crx"
 fi
 

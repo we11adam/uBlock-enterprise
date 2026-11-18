@@ -45,7 +45,7 @@ tools/make-chromium-enterprise.sh       # 输出 dist/build/uBlock0.chromium-ent
 
 | 变量 | 作用 |
 |---|---|
-| `UBO_ENT_VERSION` | 清单 `version`，例如 `1.75.1.3`。每次发布都必须递增，见 DEPLOYMENT.md |
+| `UBO_ENT_VERSION` | 可选版本断言，必须等于 `dist/version`；`version_name` 自动加 `-ent`，见 DEPLOYMENT.md |
 | `UBO_ENT_UPDATE_URL` | 清单 `update_url`，必须是 `https://` |
 | `UBO_ENT_PUBLIC_KEY` | 清单 `key`（base64 SPKI），让解包构建的 ID 与 CRX 一致 |
 

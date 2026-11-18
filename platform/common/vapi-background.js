@@ -50,7 +50,7 @@ if ( vAPI.canWASM === false ) {
 vAPI.app = {
     name: manifest.name.replace(/ dev\w+ build/, ''),
     version: (( ) => {
-        let version = manifest.version_name || manifest.version;
+        let version = (manifest.version_name || manifest.version).replace(/-ent$/, '');
         const match = /(\d+\.\d+\.\d+)(?:\.(\d+))?/.exec(version);
         if ( match && match[2] ) {
             const v = parseInt(match[2], 10);

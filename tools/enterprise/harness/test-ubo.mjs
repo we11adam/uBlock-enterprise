@@ -194,8 +194,8 @@ phase('install', async ( ) => {
     }))`);
     check('policy install: installType === "admin", not user-disableable',
         info.installType === 'admin' && info.mayDisable === false && info.enabled, JSON.stringify(info));
-    check('manifest version and version_name = upstream version (dist/version)',
-        info.version === config.v1 && info.versionName === config.v1, JSON.stringify(info));
+    check('manifest version tracks upstream and version_name adds -ent',
+        info.version === config.v1 && info.versionName === `${config.v1}-ent`, JSON.stringify(info));
     const st = await swState(ctx.cdp);
     check('all event listeners registered synchronously at SW start', st.late.length === 0, JSON.stringify(st.late));
     check('engine ready (no forced readiness)', st.stats.readyForced !== true, `readyAfter=${st.stats.readyAfter} ms`);
@@ -569,7 +569,7 @@ phase('upgrade', async ( ) => {
         filters: (await chrome.storage.local.get('user-filters'))['user-filters'] || '',
         installType: (await chrome.management.getSelf()).installType,
     }))()`);
-    check('upgrade applied at browser restart', after.version === config.v2 && after.versionName === config.v1 /* upstream */,
+    check('upgrade applied at browser restart', after.version === config.v2 && after.versionName === `${config.v2}-ent`,
         `version=${after.version} version_name=${after.versionName}`);
     check('settings, permanent rules and filters preserved across upgrade',
         after.colorBlindFriendly === true &&

@@ -7,7 +7,8 @@
 # Usage: tools/make-chromium-enterprise.sh
 #
 # Environment (all optional):
-#   UBO_ENT_VERSION     Extension version, default: content of dist/version
+#   UBO_ENT_VERSION     Optional assertion: must equal dist/version
+#   UBO_ENT_TEST_VERSION Test harness only: synthetic upgrade version
 #   UBO_ENT_UPDATE_URL  `update_url` in the manifest (HTTPS update manifest)
 #   UBO_ENT_PUBLIC_KEY  `key` in the manifest: base64 DER SubjectPublicKeyInfo
 #                       of the production signing key, so that unpacked

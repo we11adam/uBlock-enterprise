@@ -169,7 +169,7 @@ vAPI.webextFlavor = {
 
     // Whether this is a dev build.
     const manifest = browser.runtime.getManifest();
-    const version = manifest.version_name || manifest.version;
+    const version = (manifest.version_name || manifest.version).replace(/-ent$/, '');
     if ( /^\d+\.\d+\.\d+\D/.test(version) ) {
         soup.add('devbuild');
     }

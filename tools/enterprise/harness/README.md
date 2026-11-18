@@ -29,6 +29,8 @@ tools/enterprise/harness/run-ubo-tests.sh /tmp/ubo-ent-keys/test.pem /tmp/ubo-en
 ```
 
 脚本会：构建两个版本（`dist/version` 及其第 4 段加 1 的版本，用于测试升级），
+仅在隔离测试中使用 `UBO_ENT_TEST_VERSION` 生成模拟版本；两者的 `version_name`
+均为各自版本加 `-ent`。生产构建直接跟随上游，不使用这个测试变量。
 分别打包成 CRX3，生成两份更新清单，然后在容器中运行 `test-ubo.mjs`。测试使用的
 过滤器（`test-ubo-filters.json`）和管理员一样，通过扩展策略（storage.managed）
 下发。全部通过时最后一行为 `N/N passed`，退出码为 0。

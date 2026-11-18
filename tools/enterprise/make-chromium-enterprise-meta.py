@@ -18,16 +18,16 @@ build_dir = os.path.abspath(sys.argv[1])
 with open(os.path.join(proj_dir, 'dist', 'version')) as f:
     upstream_version = f.read().strip()
 
-# The version Chrome uses to decide whether to update: it must increase with
-# each enterprise release, including when rebuilding the same upstream
-# version, e.g. upstream 1.66.0 => 1.66.0.1, 1.66.0.2, etc.
-version = os.environ.get('UBO_ENT_VERSION', '').strip() or upstream_version
+# Production versions track upstream exactly. Only the isolated upgrade test
+# harness may synthesize a second version without changing dist/version.
+requested_version = os.environ.get('UBO_ENT_VERSION', '').strip()
+if requested_version and requested_version != upstream_version:
+    raise SystemExit('UBO_ENT_VERSION must equal dist/version; enterprise revisions are no longer supported')
+version = os.environ.get('UBO_ENT_TEST_VERSION', '').strip() or upstream_version
 # Chrome: 1 to 4 dot-separated integers, each 0-65535, no leading zero
 if not re.fullmatch(r'(0|[1-9]\d{0,4})(\.(0|[1-9]\d{0,4})){0,3}', version) or \
    any(int(p) > 65535 for p in version.split('.')):
     raise SystemExit(f'Invalid extension version: {version}')
-if not (version + '.').startswith(upstream_version + '.'):
-    print(f'*** warning: version {version} does not derive from upstream version {upstream_version}')
 
 manifest_file = os.path.join(build_dir, 'manifest.json')
 with open(manifest_file) as f:
@@ -35,7 +35,7 @@ with open(manifest_file) as f:
 
 manifest['version'] = version
 # uBO reads `version_name` first (vAPI.app.version, dev build detection)
-manifest['version_name'] = upstream_version
+manifest['version_name'] = f'{version}-ent'
 if re.fullmatch(r'\d+\.\d+\.\d+\.\d+', upstream_version):
     manifest['name'] += ' development build'
     manifest['short_name'] += ' dev build'
